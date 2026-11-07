@@ -10,6 +10,10 @@
 
 **07.11.2026 — Historie zwölf Monate:** Erster Abgleich holt die letzten zwölf Monatsarchive, danach nur noch den laufenden Monat; abgeschlossene Monate ändern sich nicht mehr und werden nie neu geholt (`db.months`). In den Einstellungen auf 3 Monate oder „Alles" umstellbar. Zwölf Monate eines aktiven Kontos sind rund 860 Partien ≈ 50 KB.
 
+**07.11.2026 — Allzeit-Ansicht bei Rating und Spielzeit:** Beide Ansichten haben einen vierten Zeitraum „Alles" (Wert 0, dieselbe Null wie bei der Historie). Die Bündelung richtet sich nach der Spanne, damit nie hunderte Striche auf 340 px stehen: Spielzeit bis drei Jahre ein Balken je Monat, darüber je Jahr; Rating bleibt bei einem Punkt je Tag, bekommt aber ab 400 Tagen Monat **und Jahr** an die Achse, sonst stünde „Nov." mehrfach darunter. „Alles" reicht nur so weit wie der gespeicherte Datensatz: steht die Historie auf 3 oder 12 Monate, sagt ein Hinweis in beiden Ansichten genau das und nennt den Weg zum vollen Verlauf. Einen „Zeitraum davor" gibt es bei „Alles" nicht, an seiner Stelle steht das Datum der ersten gespeicherten Partie.
+
+**07.11.2026 — Rating-Knopf „12 Monate" heißt „1 Jahr":** Vier Knöpfe müssen auf ein 360-px-Handy passen. „1 Jahr" ist kürzer, sagt dasselbe und klingt wie der Spielzeit-Knopf daneben.
+
 **07.11.2026 — Ein Punkt je Tag in der Rating-Kurve:** Pro Partie wären es über ein Jahr tausende Punkte auf 340 px. Der letzte Wert eines Tages gilt; die große Kopfzahl kommt aus `/stats` und ist damit immer der amtliche aktuelle Wert.
 
 **07.11.2026 — Varianten getrennt:** Partien mit `rules ≠ chess` (Chess960 usw.) bekommen die Marke `x`. Sie zählen in der Spielzeit mit, aber nicht in der Rating-Kurve — sie haben bei chess.com ein eigenes Rating.

@@ -3,7 +3,7 @@
    Worker die alte Fassung weiter. Fehlt eine Datei aus ASSETS auf dem
    Server, scheitert die Installation ganz: neue Dateien hier eintragen,
    entfernte austragen. */
-const CACHE = 'schach-v3';
+const CACHE = 'schach-v4';
 const ASSETS = [
   './', './index.html', './tokens.css', './style.css', './charts.js', './sync.js', './app.js',
   './fonts/inter-latin-wght-normal.woff2', './fonts/space-grotesk-latin-wght-normal.woff2',

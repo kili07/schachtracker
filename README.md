@@ -7,11 +7,13 @@ Eine kleine Web-App fürs Handy, die den eigenen Schachfortschritt bei chess.com
 | Ansicht | Inhalt |
 |---|---|
 | **Heute** | Spielzeit des Tages gegen das Tagesziel im Halbkreis, Partien, Ø je Partie, Serie an Spieltagen, die letzten 14 Tage als Balken, aktuelles Rating je Zeitklasse |
-| **Rating** | Kurve je Zeitklasse (Bullet, Blitz, Rapid, Daily) über 30 Tage, 3 oder 12 Monate, mit Bestwert, Bilanz und Einordnung gegen den Zeitraum davor |
-| **Spielzeit** | Woche, Monat oder Jahr als gestapelte Balken nach Zeitklasse, Summe, Ø je Spieltag, längste Partie und die Verteilung auf die Zeitklassen |
+| **Rating** | Kurve je Zeitklasse (Bullet, Blitz, Rapid, Daily) über 30 Tage, 3 Monate, ein Jahr oder **alles**, mit Bestwert, Bilanz und Einordnung gegen den Zeitraum davor |
+| **Spielzeit** | Woche, Monat, Jahr oder **alles** als gestapelte Balken nach Zeitklasse, Summe, Ø je Spieltag, längste Partie und die Verteilung auf die Zeitklassen |
 | **Taktik** | Taktik-Bestwert mit Datum, tiefster Wert, bester Puzzle-Rush-Lauf und der selbst mitgeschriebene Verlauf dieser Rekorde |
 
 Antippen eines Diagramms liest den Wert an dieser Stelle ab.
+
+**Alles** zeigt den gesamten gespeicherten Verlauf: in der Spielzeit ein Balken je Monat, ab drei Jahren je Jahr. Wie weit es zurückreicht, hängt an der **Historie** in den Einstellungen — steht sie auf 3 oder 12 Monate, sagt die Ansicht das offen und nennt den Weg zum vollen Verlauf.
 
 ## Daten
 

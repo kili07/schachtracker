@@ -24,7 +24,7 @@
 const KEY = 'schach.v1';
 /* Bei jeder Änderung hochzählen: wird in den Einstellungen angezeigt, damit
    sich auf dem Handy prüfen lässt, welche Fassung wirklich läuft. */
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 
 const THEME_KEY = 'schach.theme';
 /* `bar` ist die Hintergrundfarbe des Themes und landet im
@@ -37,9 +37,10 @@ const THEMES = {
 
 /* Wählbare Historie in Monaten; 0 heißt „alles, was chess.com hat". */
 const HIST = [3, 12, 0];
-/* Zeitraum-Knöpfe in Tagen */
-const RANGES_RATING = [[30, '30 Tage'], [90, '3 Monate'], [365, '12 Monate']];
-const RANGES_TIME = [[7, 'Woche'], [30, 'Monat'], [365, 'Jahr']];
+/* Zeitraum-Knöpfe in Tagen; 0 heißt „alles, was gespeichert ist" — wie bei
+   HIST, damit beide Stellen dieselbe Null bedeuten. */
+const RANGES_RATING = [[30, '30 Tage'], [90, '3 Monate'], [365, '1 Jahr'], [0, 'Alles']];
+const RANGES_TIME = [[7, 'Woche'], [30, 'Monat'], [365, 'Jahr'], [0, 'Alles']];
 /* Nach wie langer Pause beim Start von allein abgeglichen wird */
 const SYNC_IDLE = 15 * 60 * 1000;
 
@@ -57,6 +58,9 @@ const dfLong = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digi
 const dfMed = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
 const dfShort = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' });
 const dfMonth = new Intl.DateTimeFormat('de-DE', { month: 'short' });
+/* Über ein Jahr hinaus muss das Jahr an die Beschriftung, sonst steht
+   „Nov." mehrfach auf derselben Achse. */
+const dfMonthYear = new Intl.DateTimeFormat('de-DE', { month: 'short', year: '2-digit' });
 const tfTime = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
 
 /* Eingaben können deutsches Komma enthalten, parseFloat allein verschluckt es. */
@@ -99,6 +103,19 @@ const pl = (n, one, many) => nf0.format(n) + ' ' + (Math.abs(n) === 1 ? one : ma
 const axisNote = (yt) => `<span>${yt.unit === 3600 ? 'Stunden' : 'Minuten'} je Balken · Antippen zum Ablesen</span>`;
 
 const dayDate = (key) => { const [y, m, d] = String(key).split('-').map(Number); return new Date(y, m - 1, d); };
+
+/** Zeitpunkt der ältesten gespeicherten Partie. Grundlage jeder
+    Allzeit-Ansicht: weiter zurück als bis hierhin gibt es nichts.
+    Die Liste ist zwar sortiert, ein geladenes Backup muss es aber nicht
+    sein — deshalb das Minimum statt games[0]. */
+const firstGame = () => db.games.reduce((m, g) => Math.min(m, g.t), Infinity);
+
+/** „Alles" zeigt nur, was auch gespeichert ist: die Historie in den
+    Einstellungen begrenzt den Datensatz. Steht sie nicht auf „Alles", sagt
+    diese Zeile offen, wo der Verlauf wirklich endet. */
+const histNote = () => (db.hist
+  ? hint(`„Alles" reicht so weit, wie Daten da sind: gespeichert sind die <b>letzten ${esc(pl(db.hist, 'Monat', 'Monate'))}</b>. Für den vollen Verlauf in den Einstellungen die Historie auf „Alles" stellen und abgleichen.`)
+  : '');
 
 let toastTimer;
 function toast(msg) {
@@ -480,7 +497,8 @@ function renderRating() {
   const leer = leerzustand('Nach dem ersten Abgleich wächst hier Deine Rating-Kurve.', !db.games.length);
   if (leer) { el.innerHTML = leer; return; }
 
-  const from = Math.floor(Date.now() / 1000) - rRange * 86400;
+  // rRange 0 = alles: dann gibt es keine Untergrenze und keinen Zeitraum davor
+  const from = rRange ? Math.floor(Date.now() / 1000) - rRange * 86400 : 0;
   const pts = Sync.ratingSeries(db.games, c, from);
   const info = db.cur[c] || {};
   const cur = pts.length ? pts[pts.length - 1].r : info.r;
@@ -488,15 +506,19 @@ function renderRating() {
   const rec = Sync.record(db.games, c, from);
 
   // Vergleichszeitraum gleicher Länge davor, für die Einordnung als Text
-  const prevFrom = from - rRange * 86400;
-  const prev = Sync.ratingSeries(db.games, c, prevFrom).filter((p) => p.t < from);
+  const prev = rRange
+    ? Sync.ratingSeries(db.games, c, from - rRange * 86400).filter((p) => p.t < from)
+    : [];
   const mid = (a) => (a.length ? a.reduce((s, p) => s + p.r, 0) / a.length : null);
   const m0 = mid(pts), m1 = mid(prev);
 
   const vals = pts.map((p) => p.r);
   const spread = vals.length ? Math.max.apply(null, vals) - Math.min.apply(null, vals) : 0;
+  /* Über ein Jahr hinaus trägt die Achse Monat und Jahr: bei „Alles" stünde
+     sonst mehrmals derselbe Tag ohne Jahr darunter. */
+  const dfAx = pts.length && (pts[pts.length - 1].t - pts[0].t) > 400 * 86400 ? dfMonthYear : dfShort;
   const svg = Charts.line({
-    vals, labels: pts.map((p) => dfShort.format(dayDate(p.key))),
+    vals, labels: pts.map((p) => dfAx.format(dayDate(p.key))),
     fmtY: (v) => nf0.format(v), cls: 'c-' + c,
   });
 
@@ -509,12 +531,15 @@ function renderRating() {
         ${chartBox(svg, (i) => (pts[i] ? `<b>${esc(nf0.format(pts[i].r))}</b> ${esc(dfLong.format(dayDate(pts[i].key)))}` : null),
     '<span>Antippen zum Ablesen</span>')}
         <p class="tr-text">${
-          fin(m0) && fin(m1)
-            ? `Im Schnitt <b>${esc(nf0.format(Math.round(m0)))}</b>, ${esc(nf0.format(Math.abs(Math.round(m0 - m1))))} Punkte ${m0 >= m1 ? 'besser' : 'schlechter'} als im Zeitraum davor.`
-            : fin(m0) ? `Im Schnitt <b>${esc(nf0.format(Math.round(m0)))}</b> Punkte. Für einen Vergleich fehlt noch der Zeitraum davor.`
-              : 'Keine Partien in diesem Zeitraum.'
+          !fin(m0) ? 'Keine Partien in diesem Zeitraum.'
+            : fin(m1)
+              ? `Im Schnitt <b>${esc(nf0.format(Math.round(m0)))}</b>, ${esc(nf0.format(Math.abs(Math.round(m0 - m1))))} Punkte ${m0 >= m1 ? 'besser' : 'schlechter'} als im Zeitraum davor.`
+              : rRange
+                ? `Im Schnitt <b>${esc(nf0.format(Math.round(m0)))}</b> Punkte. Für einen Vergleich fehlt noch der Zeitraum davor.`
+                : `Im Schnitt <b>${esc(nf0.format(Math.round(m0)))}</b> Punkte über ${esc(pl(pts.length, 'Spieltag', 'Spieltage'))}, ab dem ${esc(dfMed.format(dayDate(pts[0].key)))}.`
         }</p>
       </div>`
+    + (rRange ? '' : histNote())
     + `<div class="card">${statsRow([
       ['Bestwert', fin(info.best) ? countNum(info.best) : '–'],
       ['Partien', countNum(rec.n)],
@@ -524,7 +549,7 @@ function renderRating() {
         fin(info.best)
           ? `Bestwert erreicht am ${esc(info.bestAt ? dfMed.format(new Date(info.bestAt * 1000)) : 'unbekanntem Datum')}. `
           : ''
-      }Bilanz im Zeitraum: ${esc(pl(rec.w, 'Sieg', 'Siege'))}, ${esc(nf0.format(rec.d))} Remis, ${esc(pl(rec.l, 'Niederlage', 'Niederlagen'))}.</p></div>`
+      }Bilanz ${rRange ? 'im Zeitraum' : 'in allen gespeicherten Partien'}: ${esc(pl(rec.w, 'Sieg', 'Siege'))}, ${esc(nf0.format(rec.d))} Remis, ${esc(pl(rec.l, 'Niederlage', 'Niederlagen'))}.</p></div>`
     + (db.cur[c] && fin(db.cur[c].w)
       ? `<p class="note">Insgesamt bei chess.com: ${esc(pl(db.cur[c].w, 'Sieg', 'Siege'))}, ${esc(nf0.format(db.cur[c].d))} Remis, ${esc(pl(db.cur[c].l, 'Niederlage', 'Niederlagen'))}.</p>`
       : '');
@@ -539,12 +564,35 @@ function renderZeit() {
   const now = new Date();
   const parts = (cls) => Sync.CLS_ORDER.map((c) => ({ k: c, v: (cls && cls[c]) || 0 }));
 
-  /* Ein Balken je Tag; im Jahr je Monat, sonst wären es 365 Striche auf
-     340 px. Jeder Balken ist nach Zeitklasse gestapelt. */
+  /* Ein Balken je Tag; ab einem Jahr je Monat, bei „Alles" über drei Jahre
+     je Jahr — sonst wären es hunderte Striche auf 340 px. Jeder Balken ist
+     nach Zeitklasse gestapelt. */
+  const first = new Date(firstGame() * 1000);
+  /* Wie viele Monate „Alles" umfasst: vom Monat der ersten Partie bis jetzt.
+     Mindestens einer — eine Partie mit Zeitstempel in der Zukunft (schiefe
+     Uhr) käme sonst auf null Balken. */
+  const spanM = tRange === 0
+    ? Math.max(1, (now.getFullYear() - first.getFullYear()) * 12 + now.getMonth() - first.getMonth() + 1)
+    : 12;
+
   let items, reader, from;
-  if (tRange > 90) {
+  if (tRange === 0 && spanM > 36) {
+    const years = [];
+    for (let y = first.getFullYear(); y <= now.getFullYear(); y++) years.push({ y, sec: 0, n: 0, cls: {} });
+    const idx = new Map(years.map((b) => [b.y, b]));
+    for (const g of db.games) {
+      const b = idx.get(new Date(g.t * 1000).getFullYear());
+      if (!b) continue;
+      b.sec += g.d || 0; b.n++;
+      b.cls[g.c] = (b.cls[g.c] || 0) + (g.d || 0);
+    }
+    from = Math.floor(new Date(years[0].y, 0, 1).getTime() / 1000);
+    items = years.map((b, i) => ({ label: String(b.y), parts: parts(b.cls), cur: i === years.length - 1 }));
+    reader = (i) => (years[i] ? `<b>${esc(fmtDur(years[i].sec))}</b> ${esc(String(years[i].y))}`
+      + ` · ${esc(pl(years[i].n, 'Partie', 'Partien'))}${partsText(years[i].cls)}` : null);
+  } else if (tRange === 0 || tRange > 90) {
     const months = [];
-    for (let i = 11; i >= 0; i--) {
+    for (let i = spanM - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push({ key: Sync.monthKey(d), date: d, sec: 0, n: 0, cls: {} });
     }
@@ -556,7 +604,9 @@ function renderZeit() {
       m.cls[g.c] = (m.cls[g.c] || 0) + (g.d || 0);
     }
     from = Sync.monthStart(months[0].key);
-    items = months.map((m, i) => ({ label: dfMonth.format(m.date), parts: parts(m.cls), cur: i === months.length - 1 }));
+    // Über zwölf Monate hinaus gehört das Jahr an die Beschriftung
+    const lbl = (d) => (spanM > 12 ? dfMonthYear : dfMonth).format(d);
+    items = months.map((m, i) => ({ label: lbl(m.date), parts: parts(m.cls), cur: i === months.length - 1 }));
     reader = (i) => (months[i] ? `<b>${esc(fmtDur(months[i].sec))}</b> ${esc(dfMonth.format(months[i].date))} ${months[i].date.getFullYear()}`
       + ` · ${esc(pl(months[i].n, 'Partie', 'Partien'))}${partsText(months[i].cls)}` : null);
   } else {
@@ -568,7 +618,8 @@ function renderZeit() {
   }
 
   let total = 0, n = 0, longest = 0, prevTotal = 0;
-  const prevFrom = from - (tRange > 90 ? 365 : tRange) * 86400;
+  // Bei „Alles" gibt es keinen Zeitraum davor: prevFrom = from lässt ihn leer
+  const prevFrom = tRange === 0 ? from : from - (tRange > 90 ? 365 : tRange) * 86400;
   for (const g of db.games) {
     if (g.t >= from) {
       total += g.d || 0; n++;
@@ -586,11 +637,14 @@ function renderZeit() {
         <div class="big-row"><span class="num big">${total >= 3600 ? countNum(total / 3600, true) : countNum(total / 60)}<small>${total >= 3600 ? 'h' : 'min'}</small></span></div>
         ${chartBox(Charts.stack(items, yt), reader, axisNote(yt))}
         <p class="tr-text">${
-          prevTotal > 0
-            ? `<b>${esc(fmtDur(Math.abs(total - prevTotal)))}</b> ${total >= prevTotal ? 'mehr' : 'weniger'} als im Zeitraum davor.`
-            : 'Für einen Vergleich fehlt noch der Zeitraum davor.'
+          tRange === 0
+            ? `Erste gespeicherte Partie am <b>${esc(dfMed.format(first))}</b>.`
+            : prevTotal > 0
+              ? `<b>${esc(fmtDur(Math.abs(total - prevTotal)))}</b> ${total >= prevTotal ? 'mehr' : 'weniger'} als im Zeitraum davor.`
+              : 'Für einen Vergleich fehlt noch der Zeitraum davor.'
         }</p>
       </div>`
+    + (tRange ? '' : histNote())
     + `<div class="card">${statsRow([
       ['Partien', countNum(n)],
       ['Ø je Spieltag', aktiv ? esc(fmtDur(total / aktiv)) : '–'],
