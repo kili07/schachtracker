@@ -24,7 +24,7 @@
 const KEY = 'schach.v1';
 /* Bei jeder Änderung hochzählen: wird in den Einstellungen angezeigt, damit
    sich auf dem Handy prüfen lässt, welche Fassung wirklich läuft. */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 
 const THEME_KEY = 'schach.theme';
 /* `bar` ist die Hintergrundfarbe des Themes und landet im
@@ -972,10 +972,9 @@ function importBackup(file) {
    Deshalb liegt ein zusätzlicher Verlaufseintrag („Wächter") über der App:
    Zurück landet bei uns statt beim System. Der Druck schließt der Reihe
    nach, was offen ist (Sheet, Unterseite), und baut den Wächter wieder auf.
-   Auf „Heute" fragt ein Dialog nach. Zusammenspiel ist fummelig und
+   Auf „Heute" kommt ein Hinweis (leaveHint). Zusammenspiel ist fummelig und
    erprobt: nur mit Bedacht ändern. */
 let guardUp = false;
-let leaving = false;
 
 function pushGuard() {
   if (guardUp) return;
@@ -986,14 +985,19 @@ function pushGuard() {
 /** Vor allem, was die Zurück-Taste abfangen soll: Sheet öffnen, Seite wechseln. */
 function armBack() { pushGuard(); }
 
-/** „Verlassen" im Abschiedsdialog: der Dialog hat selbst einen Wächter
-    aufgebaut. Erst ihn abräumen, dann führt der zweite Schritt aus der App.
-    Beides über zwei Runden: history.back() zweimal hintereinander fasst der
-    Browser zu einem Schritt zusammen. */
-function leaveApp() {
-  closeSheet();
-  leaving = true;
-  history.back();
+/** Zurück auf der Übersicht: Hinweis statt Dialog. Ein „Verlassen"-Knopf
+    kann die installierte App nicht schließen: history.back() vom ersten
+    Verlaufseintrag aus tut nichts, window.close() blockt der Browser, sobald
+    der Verlauf mehr als einen Eintrag hat. Nur die System-Zurückgeste selbst
+    beendet die App. Deshalb bleibt der Wächter hier unten, und der nächste
+    Zurück-Druck schließt die App. Tippt man stattdessen in die App, steht der
+    Wächter wieder (Antippen zählt als Nutzeraktion; ohne sie überspringt
+    Chrome den Eintrag beim Zurückgehen). In der Dashboard-Vorschau nichts tun,
+    dann verkleinert das Dashboard die App. */
+function leaveHint(msg) {
+  if (window.__dashboard) return;
+  toast(msg || 'Zum Verlassen nochmal zurück wischen');
+  document.addEventListener('pointerdown', pushGuard, { once: true });
 }
 
 function wireBack() {
@@ -1001,21 +1005,12 @@ function wireBack() {
   window.addEventListener('popstate', () => {
     guardUp = false;
 
-    if (leaving) {
-      leaving = false;
-      history.back();
-      // Bleiben wir doch hier (Browser-Tab ohne Vorgänger), fehlt der Wächter.
-      // Kein Timer zum Nachrüsten: ein pushState würde das Verlassen abbrechen.
-      document.addEventListener('pointerdown', pushGuard, { once: true });
-      return;
-    }
     // Über den Abbrechen-Knopf, nicht closeSheet: verschachtelte Sheets haben
     // dort ihren Rückweg zum vorherigen Sheet hinterlegt.
     if (!$('#sheet').classList.contains('hidden')) { $('#sheetCancel').click(); pushGuard(); return; }
     if (view !== 'heute') { nav('heute'); pushGuard(); return; }
 
-    askSheet('App verlassen?', 'Möchtest Du die App wirklich schließen?',
-      'Verlassen', leaveApp);
+    leaveHint();
   });
 }
 
